@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Selection Sort — Interactive Game</title>
+<style>
+  :root{
+    --bg:#0f1724;
+    --panel:#0b1220;
+    --muted:#9aa7bf;
+    --accent:#60a5fa;
+    --good:#34d399;
+    --bad:#fb7185;
+    --bar1:#60a5fa;
+    --bar2:#fbbf24;
+    --bar3:#10b981;
+    --bar4:#a78bfa;
+    --glass: rgba(255,255,255,0.03);
+    --shadow: 0 6px 18px rgba(2,6,23,0.7);
+    font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 10% 10%, rgba(96,165,250,0.06), transparent),
+      radial-gradient(1000px 500px at 90% 80%, rgba(167,139,250,0.04), transparent),
+      var(--bg);
+    color: #e6eef8;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    padding:18px;
+  }
+
+  .container{
+    max-width:1100px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns: 1fr 360px;
+    gap:18px;
+    align-items:start;
+  }
+
+  header{
+    grid-column:1/-1;
+    display:flex;
+    gap:12px;
+    align-items:center;
+  }
+  h1{
+    margin:0;
+    font-size:20px;
+    letter-spacing:0.2px;
+  }
+  .subtitle{
+    color:var(--muted);
+    font-size:13px;
+    margin-left:6px;
+  }
+
+  .board{
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border-radius:12px;
+    padding:18px;
+    box-shadow:var(--shadow);
+    min-height:380px;
+  }
+
+  .controls{
+    background:var(--panel);
+    padding:14px;
+    border-radius:12px;
+    box-shadow:var(--shadow);
+  }
+
+  .row{display:flex;gap:8px;align-items:center}
+  .row.space{justify-content:space-between}
+  label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+  .sm{
+    font-size:13px;color:var(--muted);
+  }
+
+  .top-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  button, .btn{
+    border:0;
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    color:var(--accent);
+    padding:8px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:600;
+    box-shadow: none;
+    transition:transform .12s ease, box-shadow .12s ease;
+    display:inline-flex;
+    gap:8px;
+    align-items:center;
+  }
+  button.primary{
+    background:linear-gradient(90deg,var(--accent), #3b82f6);
+    color:white;
+  }
+  button.ghost{
+    background:transparent;
+    color:var(--muted);
+    border:1px solid rgba(255,255,255,0.04);
+  }
+  button:active{transform:translateY(1px)}
+  input[type=range]{width:100%}
+
+  /* array area */
+  .array-wrap{
+    padding:18px;
+    display:flex;
+    gap:12px;
+    align-items:end;
+    justify-content:center;
+    flex-wrap:wrap;
+    min-height:220px;
+  }
+
+  .bar{
+    width:40px;
+    min-width:28px;
+    border-radius:8px 8px 4px 4px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    padding:6px 4px;
+    position:relative;
+    transition:transform .28s cubic-bezier(.2,.9,.2,1), box-shadow .18s;
+    user-select:none;
+  }
+
+  .bar .val{
+    writing-mode:vertical-rl;
+    transform:rotate(180deg);
+    font-weight:700;
+    font-size:13px;
+    color:#061224;
+    background:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.8));
+    padding:6px 6px;
+    border-radius:6px;
+    box-shadow:0 8px 20px rgba(3,7,18,0.45);
+  }
+
+  .bar.small .val{font-size:11px;padding:5px 6px}
+  .bar.big{width:48px}
+
+  .bar.index{
+    position:absolute;
+    top:-22px;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  /* states */
+  .bar.unsorted{opacity:0.95}
+  .bar.sorted{outline:3px solid rgba(52,211,153,0.12)}
+  .bar.current{box-shadow:0 10px 26px rgba(96,165,250,0.12); transform:translateY(-8px)}
+  .bar.min{box-shadow:0 10px 26px rgba(16,185,129,0.08); transform:translateY(-6px)}
+  .bar.check-wrong{outline:3px solid rgba(251,113,133,0.14)}
+  .bar.hint{outline:3px dashed rgba(255,255,255,0.06)}
+
+  .explain{
+    margin-top:12px;
+    font-size:14px;
+    color:var(--muted);
+    min-height:48px;
+  }
+
+  /* right panel */
+  .panel{
+    position:sticky;
+    top:18px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .panel .section{padding:12px;border-radius:10px;background:var(--glass);border:1px solid rgba(255,255,255,0.02)}
+  .score{
+    font-size:22px;
+    color:var(--accent);
+    font-weight:700;
+  }
+  .small-muted{font-size:12px;color:var(--muted)}
+
+  footer{grid-column:1/-1;text-align:center;margin-top:10px;color:var(--muted);font-size:12px}
+
+  /* responsive */
+  @media (max-width:980px){
+    .container{grid-template-columns:1fr; padding-bottom:60px}
+    .panel{position:static}
+  }
+
+  /* keyboard hints */
+  .kbd{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="container" aria-live="polite">
+    <header>
+      <div>
+        <h1>Selection Sort — Interactive Game</h1>
+        <div class="subtitle">Learn selection sort by watching, stepping through, or playing</div>
+      </div>
+      <div style="margin-left:auto" class="sm">Tip: Use keyboard — Space: play/pause, N: next step, U: undo</div>
+    </header>
+
+    <main class="board" role="main" aria-label="Selection sort interactive board">
+      <div class="top-actions">
+        <button id="shuffleBtn" class="ghost" title="Shuffle array">Shuffle</button>
+        <button id="autoBtn" class="primary" title="Auto-play selection sort">Auto Play</button>
+        <button id="stepBtn" class="ghost" title="Step one operation (N)">Next Step</button>
+        <button id="modeBtn" class="ghost" title="Switch to player mode">Switch to Player Mode</button>
+        <button id="hintBtn" class="ghost" title="Show a hint">Hint</button>
+        <button id="undoBtn" class="ghost" title="Undo last user move (U)">Undo</button>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+        <div style="min-width:160px">
+          <label>Array size</label>
+          <input type="range" id="sizeRange" min="4" max="12" value="8" />
+        </div>
+        <div style="width:160px">
+          <label>Speed</label>
+          <input type="range" id="speedRange" min="100" max="1500" step="50" value="400" />
+        </div>
+        <div style="min-width:140px">
+          <label>Difficulty</label>
+          <select id="difficulty" style="width:100%;padding:8px;border-radius:8px;background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)">
+            <option value="easy">Easy (hints & checks)</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard (no hints)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="arrayArea" class="array-wrap" aria-live="polite" role="list"></div>
+
+      <div class="explain" id="explain">Press Auto Play to see selection sort or switch to Player Mode to try choosing minima yourself.</div>
+    </main>
+
+    <aside class="panel">
+      <div class="section controls">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="small-muted">Mode</div>
+            <div id="modeLabel" style="font-weight:700">Watch</div>
+          </div>
+          <div style="text-align:right">
+            <div class="small-muted">Score</div>
+            <div class="score" id="score">0</div>
+            <div class="small-muted">Moves: <span id="moves">0</span></div>
+          </div>
+        </div>
+        <hr style="border:none;height:8px;opacity:0.02">
+        <div style="margin-top:8px">
+          <div class="small-muted">Controls</div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <div class="kbd">Space: Play/Pause</div>
+            <div class="kbd">N: Next</div>
+            <div class="kbd">U: Undo</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="small-muted">Status</div>
+        <div id="status" style="font-weight:700;margin-top:8px">Idle</div>
+        <div style="margin-top:10px;color:var(--muted)" id="statusDetail">Ready</div>
+      </div>
+
+      <div class="section">
+        <div class="small-muted">How to play</div>
+        <div style="margin-top:8px;color:var(--muted);font-size:13px">
+          Watch mode: auto or step through the algorithm. Player mode: at each pass choose the index of the minimum element in the unsorted part. Correct picks score points; wrong picks lose points.
+        </div>
+      </div>
+    </aside>
+
+    <footer>Selection Sort Game — visualize finding the minimum and swapping it to the front. Built to teach algorithmic thinking.</footer>
+  </div>
+
+<script>
+(() => {
+  // Utils
+  const el = id => document.getElementById(id);
+  const rand = (a,b)=> Math.floor(Math.random()*(b-a+1))+a;
+  const clamp = (v,a,b)=> Math.max(a,Math.min(b,v));
+
+  // State
+  let arr = [];
+  let size = parseInt(el('sizeRange').value,10);
+  let speed = parseInt(el('speedRange').value,10);
+  let mode = 'watch'; // 'watch' | 'player'
+  let playing = false;
+  let autoInterval = null;
+  let iPtr = 0; // current i (start of unsorted)
+  let jPtr = 1; // current j (scanning)
+  let minIdx = 0;
+  let sortedCount = 0;
+  let history = []; // for undo
+  let score = 0;
+  let moves = 0;
+  let difficulty = el('difficulty').value;
+
+  // Elements
+  const arrayArea = el('arrayArea');
+  const explain = el('explain');
+  const status = el('status');
+  const statusDetail = el('statusDetail');
+  const modeLabel = el('modeLabel');
+  const scoreEl = el('score');
+  const movesEl = el('moves');
+
+  // Color palette for bars (accessible)
+  const barColors = ['#60a5fa','#fbbf24','#10b981','#a78bfa','#fb7185','#38bdf8','#f97316','#e879f9'];
+
+  function setStatus(s, detail='') {
+    status.textContent = s;
+    statusDetail.textContent = detail;
+  }
+
+  function saveHistory() {
+    history.push({
+      arr: arr.slice(),
+      iPtr, jPtr, minIdx, sortedCount, mode, score, moves
+    });
+    if (history.length>50) history.shift();
+  }
+
+  function undo() {
+    if (history.length===0) return;
+    const state = history.pop();
+    arr = state.arr.slice();
+    iPtr = state.iPtr; jPtr = state.jPtr; minIdx = state.minIdx; sortedCount = state.sortedCount;
+    mode = state.mode; score = state.score; moves = state.moves;
+    updateUI();
+    setStatus('Undone', 'Reverted last move.');
+  }
+
+  function newArray(n){
+    arr = [];
+    // generate distinct-ish numbers for clearer comparison
+    for (let k=0;k<n;k++){
+      arr.push(rand(10,99));
+    }
+    size = n;
+    resetAlgorithm();
+    updateUI();
+  }
+
+  function resetAlgorithm(){
+    iPtr = 0; jPtr = 1; minIdx = 0; sortedCount = 0;
+    playing = false;
+    clearAuto();
+    history = [];
+    moves = 0;
+    score = 0;
+    updateScore();
+    setStatus('Ready','Press Auto Play or switch to Player Mode.');
+  }
+
+  function updateScore(){ scoreEl.textContent = score; movesEl.textContent = moves; }
+
+  function renderArray(highlights = {}) {
+    // highlights: currentIndex, minIndex, sortedUpTo, wrongPickIndex, hintIndex
+    arrayArea.innerHTML = '';
+    const max = Math.max(...arr);
+    for (let k=0;k<arr.length;k++){
+      const v = arr[k];
+      const h = document.createElement('div');
+      h.className = 'bar unsorted';
+      h.setAttribute('role','listitem');
+      h.style.height = `${Math.max(36, (v / max) * 180)}px`;
+      h.style.background = `linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))`;
+      // color stripe
+      const stripe = document.createElement('div');
+      stripe.style.position='absolute';
+      stripe.style.left=0; stripe.style.right=0; stripe.style.bottom=0; stripe.style.top=0;
+      stripe.style.borderRadius='8px 8px 4px 4px';
+      stripe.style.opacity='0.12';
+      stripe.style.zIndex='-1';
+      stripe.style.background = barColors[k % barColors.length];
+      h.appendChild(stripe);
+
+      if (k <= (highlights.sortedUpTo ?? (sortedCount-1))) {
+        h.classList.add('sorted');
+        stripe.style.opacity='0.22';
+      }
+      if (k === (highlights.currentIndex ?? iPtr)) {
+        h.classList.add('current');
+        stripe.style.opacity='0.32';
+      }
+      if (k === (highlights.minIndex ?? minIdx)) {
+        h.classList.add('min');
+        stripe.style.opacity='0.38';
+      }
+      if (k === (highlights.wrongIndex ?? -1)) {
+        h.classList.add('check-wrong');
+      }
+      if (k === (highlights.hintIndex ?? -1)) {
+        h.classList.add('hint');
+      }
+
+      const idx = document.createElement('div');
+      idx.className='bar index';
+      idx.textContent = k;
+
+      const val = document.createElement('div');
+      val.className='val';
+      val.textContent = v;
+
+      h.appendChild(idx);
+      h.appendChild(val);
+
+      // click handler for player mode
+      h.addEventListener('click', () => {
+        if (mode==='player') {
+          handlePlayerPick(k);
+        } else {
+          // in watch mode clicking toggles highlight explanation
+          setStatus('Info', `Clicked index ${k} (value ${v}).`);
+        }
+      });
+
+      arrayArea.appendChild(h);
+    }
+  }
+
+  function updateUI(){
+    renderArray({currentIndex:iPtr, minIndex:minIdx, sortedUpTo:sortedCount-1});
+    modeLabel.textContent = mode==='watch' ? 'Watch' : 'Player';
+    explain.textContent = getExplainText();
+    updateScore();
+  }
+
+  function getExplainText(){
+    if (sortedCount >= arr.length) return 'Array fully sorted! Great job.';
+    if (mode==='watch') {
+      return `Pass ${iPtr+1}/${arr.length-1}: find minimum in indices [${iPtr} .. ${arr.length-1}]. Currently scanning j=${jPtr}, min=${minIdx} (value ${arr[minIdx]}).`;
+    } else {
+      return `Your turn: choose the index of the minimum element in indices [${iPtr} .. ${arr.length-1}].`;
+    }
+  }
+
+  // Core selection sort step, returns an action descriptor
+  function selectionStep() {
+    // if finished
+    if (iPtr >= arr.length-1) {
+      sortedCount = arr.length;
+      playing = false;
+      clearAuto();
+      setStatus('Sorted', 'The array is fully sorted.');
+      return;
+    }
+    // scanning phase: advance j, update min
+    if (jPtr < arr.length) {
+      setStatus('Scanning', `Comparing arr[${jPtr}] (${arr[jPtr]}) with current min arr[${minIdx}] (${arr[minIdx]}).`);
+      if (arr[jPtr] < arr[minIdx]) {
+        minIdx = jPtr;
+        setStatus('New minimum', `Found new min at index ${minIdx} (${arr[minIdx]}).`);
+      }
+      jPtr++;
+    } else {
+      // j finished: swap min with i
+      if (minIdx !== iPtr) {
+        setStatus('Swapping', `Swap index ${iPtr} (${arr[iPtr]}) and min ${minIdx} (${arr[minIdx]}).`);
+        saveHistory();
+        [arr[iPtr], arr[minIdx]] = [arr[minIdx], arr[iPtr]];
+        moves++;
+        score += 5;
+      } else {
+        setStatus('No swap needed', `Element at i=${iPtr} is already minimum.`);
+        saveHistory();
+        moves++;
+        score += 2;
+      }
+      // mark this position sorted
+      sortedCount = iPtr + 1;
+      // advance to next pass
+      iPtr++;
+      minIdx = iPtr;
+      jPtr = iPtr + 1;
+    }
+    updateUI();
+  }
+
+  function autoPlayStart(){
+    if (playing) return;
+    playing = true;
+    setStatus('Playing','Auto-running selection sort.');
+    autoInterval = setInterval(() => {
+      selectionStep();
+      if (!playing || sortedCount>=arr.length) {
+        clearAuto();
+      }
+    }, Math.max(80, speed));
+  }
+  function clearAuto(){
+    if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+    playing = false;
+  }
+
+  // Player mode logic: user selects an index; check if correct min
+  function handlePlayerPick(pickIdx){
+    if (mode!=='player') return;
+    if (iPtr >= arr.length-1) {
+      setStatus('Done','Array already sorted.');
+      return;
+    }
+    // valid picks must be within unsorted region
+    if (pickIdx < iPtr || pickIdx >= arr.length) {
+      setStatus('Invalid', 'Pick an index within the unsorted region.');
+      flashWrong(pickIdx);
+      return;
+    }
+    // compute true min
+    let trueMin = iPtr;
+    for (let k=iPtr+1;k<arr.length;k++) if (arr[k] < arr[trueMin]) trueMin = k;
+
+    moves++;
+    if (pickIdx === trueMin) {
+      saveHistory();
+      score += 10;
+      // perform swap (maybe same index)
+      if (pickIdx !== iPtr) {
+        [arr[iPtr], arr[pickIdx]] = [arr[pickIdx], arr[iPtr]];
+        setStatus('Correct', `Correct! Swapped ${iPtr} and ${pickIdx}.`);
+      } else {
+        setStatus('Correct', `Correct! No swap needed.`);
+      }
+      sortedCount = iPtr + 1;
+      iPtr++;
+      minIdx = iPtr;
+      jPtr = iPtr + 1;
+    } else {
+      // penalty
+      score -= 4;
+      setStatus('Wrong', `Index ${pickIdx} is not the minimum. The correct one is ${trueMin}.`);
+      flashWrong(pickIdx, trueMin);
+      // optionally reveal hint depending on difficulty
+      if (difficulty === 'easy') {
+        // highlight correct min briefly and auto-swap small penalty
+        setTimeout(()=> {
+          // show hint then no automatic swap — user must pick again
+          renderArray({currentIndex:iPtr, minIndex:trueMin, sortedUpTo:sortedCount-1, hintIndex:trueMin});
+        }, 260);
+      }
+    }
+    updateScore();
+    updateUI();
+    if (sortedCount >= arr.length) {
+      setStatus('Sorted','All elements sorted — well done!');
+    }
+  }
+
+  function flashWrong(wrongIdx, correctIdx=null){
+    renderArray({currentIndex:iPtr, minIndex:minIdx, sortedUpTo:sortedCount-1, wrongIndex:wrongIdx, hintIndex:correctIdx});
+    setTimeout(()=> updateUI(), Math.max(300, speed/2));
+  }
+
+  // UI actions
+  el('shuffleBtn').addEventListener('click', ()=>{
+    size = parseInt(el('sizeRange').value,10);
+    const n = size;
+    const newArr = [];
+    // generate moderately distinct numbers
+    for (let k=0;k<n;k++) newArr.push(rand(10,99));
+    arr = newArr;
+    resetAlgorithm();
+    updateUI();
+  });
+
+  el('autoBtn').addEventListener('click', ()=>{
+    if (mode==='player') {
+      setStatus('Switch to Watch mode', 'Auto Play works in Watch mode only.');
+      return;
+    }
+    if (!playing) {
+      autoPlayStart();
+      el('autoBtn').textContent = 'Pause';
+      el('autoBtn').classList.remove('primary');
+      el('autoBtn').classList.add('ghost');
+    } else {
+      clearAuto();
+      el('autoBtn').textContent = 'Auto Play';
+      el('autoBtn').classList.remove('ghost');
+      el('autoBtn').classList.add('primary');
+      setStatus('Paused','Auto play paused.');
+    }
+  });
+
+  el('stepBtn').addEventListener('click', ()=>{
+    if (mode==='player') {
+      setStatus('Player Mode','Use clicks to choose the minimum index.');
+      return;
+    }
+    selectionStep();
+  });
+
+  el('modeBtn').addEventListener('click', ()=>{
+    if (mode==='watch') {
+      mode='player';
+      el('modeBtn').textContent='Switch to Watch Mode';
+      setStatus('Player mode','Click the index of the minimum element.');
+      clearAuto();
+      el('autoBtn').textContent = 'Auto Play';
+      el('autoBtn').classList.remove('ghost'); el('autoBtn').classList.add('primary');
+    } else {
+      mode='watch';
+      el('modeBtn').textContent='Switch to Player Mode';
+      setStatus('Watch mode','You can step or auto-play the algorithm.');
+    }
+    updateUI();
+  });
+
+  el('hintBtn').addEventListener('click', ()=>{
+    if (difficulty === 'hard') {
+      setStatus('No hints', 'Hints are disabled in Hard difficulty.');
+      return;
+    }
+    // show where the min is for current pass
+    if (iPtr >= arr.length-1) { setStatus('Done','No hint — array is sorted.'); return; }
+    let trueMin = iPtr;
+    for (let k=iPtr+1;k<arr.length;k++) if (arr[k] < arr[trueMin]) trueMin = k;
+    renderArray({currentIndex:iPtr, minIndex:minIdx, sortedUpTo:sortedCount-1, hintIndex:trueMin});
+    setStatus('Hint', `Minimum in unsorted region is at index ${trueMin} (value ${arr[trueMin]}).`);
+    setTimeout(()=> updateUI(), Math.max(700, speed));
+  });
+
+  el('undoBtn').addEventListener('click', ()=>{
+    undo();
+  });
+
+  el('sizeRange').addEventListener('input', (e)=>{
+    const n = parseInt(e.target.value,10);
+    el('sizeRange').title = `${n}`;
+  });
+  el('sizeRange').addEventListener('change', (e)=>{
+    newArray(parseInt(e.target.value,10));
+  });
+
+  el('speedRange').addEventListener('input', (e)=>{
+    speed = parseInt(e.target.value,10);
+    el('speedRange').title = `${speed} ms`;
+    if (autoInterval){
+      clearAuto();
+      autoPlayStart();
+    }
+  });
+
+  el('difficulty').addEventListener('change', (e)=>{
+    difficulty = e.target.value;
+  });
+
+  // keyboard
+  window.addEventListener('keydown', (ev)=>{
+    if (ev.key === ' '){
+      ev.preventDefault();
+      // toggle play
+      el('autoBtn').click();
+    } else if (ev.key.toLowerCase() === 'n') {
+      el('stepBtn').click();
+    } else if (ev.key.toLowerCase() === 'u') {
+      el('undoBtn').click();
+    }
+  });
+
+  // init
+  newArray(size);
+
+  // Provide a gentle intro automated demo on first load
+  setTimeout(()=> {
+    setStatus('Ready','Try Auto Play or switch to Player Mode to practice.');
+  }, 600);
+
+})();
+</script>
+</body>
+</html>

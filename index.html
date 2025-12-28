@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulations</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Pause, SkipForward, RefreshCw, RotateCcw, Check, X, Trophy, Info, BrainCircuit, GraduationCap } from 'lucide-react';
+
+const BubbleSortGame = () => {
+  // --- Configuration ---
+  const ARRAY_SIZE = 8;
+  const MIN_VAL = 10;
+  const MAX_VAL = 100;
+  const ANIMATION_SPEED_LEVELS = { Slow: 800, Normal: 400, Fast: 100 };
+
+  // --- State ---
+  const [mode, setMode] = useState('learn'); // 'learn' | 'play'
+  const [array, setArray] = useState([]);
+  const [indices, setIndices] = useState({ i: 0, j: 0 }); // i = outer loop, j = inner loop
+  const [isSorting, setIsSorting] = useState(false);
+  const [isSorted, setIsSorted] = useState(false);
+  const [speed, setSpeed] = useState('Normal');
+  const [message, setMessage] = useState("Welcome! Select a mode to start.");
+  const [stats, setStats] = useState({ comparisons: 0, swaps: 0, score: 0, mistakes: 0 });
+  const [feedback, setFeedback] = useState(null); // 'correct' | 'wrong' | null
+
+  // --- Refs for interval management ---
+  const timerRef = useRef(null);
+
+  // --- Initialization ---
+  const generateArray = useCallback(() => {
+    const newArray = Array.from({ length: ARRAY_SIZE }, () => 
+      Math.floor(Math.random() * (MAX_VAL - MIN_VAL + 1)) + MIN_VAL
+    );
+    setArray(newArray);
+    setIndices({ i: 0, j: 0 });
+    setIsSorted(false);
+    setIsSorting(false);
+    setStats({ comparisons: 0, swaps: 0, score: 0, mistakes: 0 });
+    setMessage(mode === 'learn' ? "Press Play to start sorting." : "Is the left bar taller than the right? Swap or Pass.");
+    setFeedback(null);
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, [mode]);
+
+  useEffect(() => {
+    generateArray();
+  }, [generateArray]);
+
+  // --- Core Sorting Logic (Step) ---
+  const performStep = useCallback((currentArray, currentI, currentJ, currentStats) => {
+    // If we've completed the inner loop pass
+    if (currentJ >= ARRAY_SIZE - 1 - currentI) {
+      // Check if outer loop is done
+      if (currentI >= ARRAY_SIZE - 2) {
+        return { 
+          finished: true, 
+          newArray: currentArray, 
+          newI: currentI, 
+          newJ: currentJ,
+          newStats: currentStats 
+        };
+      }
+      // Reset inner loop, increment outer loop
+      return { 
+        finished: false, 
+        newArray: currentArray, 
+        newI: currentI + 1, 
+        newJ: 0,
+        newStats: currentStats
+      };
+    }
+
+    // Comparison Logic
+    const nextArray = [...currentArray];
+    let swapped = false;
+    let newStats = { ...currentStats, comparisons: currentStats.comparisons + 1 };
+    
+    // Bubble Sort Rule: If Left > Right, Swap
+    if (nextArray[currentJ] > nextArray[currentJ + 1]) {
+      [nextArray[currentJ], nextArray[currentJ + 1]] = [nextArray[currentJ + 1], nextArray[currentJ]];
+      swapped = true;
+      newStats.swaps += 1;
+    }
+
+    return { 
+      finished: false, 
+      newArray: nextArray, 
+      newI: currentI, 
+      newJ: currentJ + 1,
+      newStats,
+      swapped
+    };
+  }, []);
+
+  // --- Learn Mode: Auto-Player ---
+  const handleStep = useCallback(() => {
+    if (isSorted) return;
+
+    setArray(prevArray => {
+      const { finished, newArray, newI, newJ, newStats, swapped } = performStep(prevArray, indices.i, indices.j, stats);
+
+      if (finished) {
+        setIsSorted(true);
+        setIsSorting(false);
+        setMessage("Sorting Complete! The array is fully sorted.");
+        setIndices({ i: 0, j: -1 }); // j=-1 hides highlights
+        if (timerRef.current) clearInterval(timerRef.current);
+        return prevArray;
+      }
+
+      setIndices({ i: newI, j: newJ });
+      setStats(newStats);
+      
+      const leftVal = prevArray[indices.j];
+      const rightVal = prevArray[indices.j+1];
+      
+      if (swapped) {
+        setMessage(`Swapped ${leftVal} and ${rightVal} because ${leftVal} > ${rightVal}.`);
+      } else if (newJ === 0 && newI > indices.i) {
+        setMessage(`Pass Complete. Largest remaining item bubbled to end.`);
+      } else {
+        setMessage(`${leftVal} <= ${rightVal}, so no swap needed.`);
+      }
+
+      return newArray;
+    });
+  }, [indices, isSorted, stats, performStep]);
+
+  // --- Timer Effect for Auto-Play ---
+  useEffect(() => {
+    if (isSorting && !isSorted) {
+      timerRef.current = setInterval(handleStep, ANIMATION_SPEED_LEVELS[speed]);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [isSorting, isSorted, speed, handleStep]);
+
+  // --- Play Mode: User Interaction ---
+  const handleUserDecision = (action) => {
+    if (isSorted) return;
+
+    const currentVal = array[indices.j];
+    const nextVal = array[indices.j + 1];
+    const shouldSwap = currentVal > nextVal;
+
+    let isCorrect = false;
+    if (action === 'swap' && shouldSwap) isCorrect = true;
+    if (action === 'pass' && !shouldSwap) isCorrect = true;
+
+    if (isCorrect) {
+      // Correct Move
+      setFeedback('correct');
+      setStats(prev => ({ ...prev, score: prev.score + 10 }));
+      setMessage("Correct! " + (action === 'swap' ? "Swapping items." : "Items already in order."));
+      
+      // Execute the logic visually
+      if (action === 'swap') {
+        const newArr = [...array];
+        [newArr[indices.j], newArr[indices.j + 1]] = [newArr[indices.j + 1], newArr[indices.j]];
+        setArray(newArr);
+        setStats(prev => ({ ...prev, swaps: prev.swaps + 1 }));
+      }
+      setStats(prev => ({ ...prev, comparisons: prev.comparisons + 1 }));
+
+      // Advance indices
+      setTimeout(() => {
+        setFeedback(null);
+        let nextJ = indices.j + 1;
+        let nextI = indices.i;
+
+        if (nextJ >= ARRAY_SIZE - 1 - nextI) {
+          nextJ = 0;
+          nextI++;
+          setMessage("Pass complete! Largest item locked in.");
+        }
+
+        if (nextI >= ARRAY_SIZE - 1) {
+          setIsSorted(true);
+          setMessage(`Game Over! Final Score: ${stats.score + 10}`); // Add the points we just added to display
+          setIndices({ i: 0, j: -1 });
+        } else {
+          setIndices({ i: nextI, j: nextJ });
+        }
+      }, 500);
+
+    } else {
+      // Wrong Move
+      setFeedback('wrong');
+      setStats(prev => ({ ...prev, score: Math.max(0, prev.score - 5), mistakes: prev.mistakes + 1 }));
+      setMessage(shouldSwap 
+        ? `Oops! ${currentVal} is greater than ${nextVal}, so they MUST swap.` 
+        : `Oops! ${currentVal} is not greater than ${nextVal}, so NO swap.`);
+      
+      setTimeout(() => setFeedback(null), 1000);
+    }
+  };
+
+
+  // --- Helper: Bar Color ---
+  const getBarColor = (index) => {
+    if (isSorted) return 'bg-emerald-400'; // All sorted
+    
+    // In Bubble Sort, the last 'i' elements are already sorted
+    if (index >= ARRAY_SIZE - indices.i) return 'bg-emerald-400'; // Sorted partition
+    
+    // Active pair being compared
+    if (index === indices.j || index === indices.j + 1) {
+      if (feedback === 'correct') return 'bg-green-400';
+      if (feedback === 'wrong') return 'bg-red-400';
+      return 'bg-yellow-400';
+    }
+    
+    return 'bg-blue-400'; // Default
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8">
+      <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+        
+        {/* Header & Mode Switch */}
+        <div className="bg-slate-900 text-white p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <RefreshCw className="w-6 h-6 text-blue-400" />
+              Valtorta College Bubble Sort Master
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              {mode === 'learn' ? 'Watch and understand the algorithm.' : 'Apply the algorithm logic yourself!'}
+            </p>
+          </div>
+          
+          <div className="flex bg-slate-800 rounded-lg p-1">
+            <button
+              onClick={() => setMode('learn')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${mode === 'learn' ? 'bg-blue-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+            >
+              <GraduationCap size={18} /> Learn
+            </button>
+            <button
+              onClick={() => setMode('play')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${mode === 'play' ? 'bg-purple-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+            >
+              <BrainCircuit size={18} /> Play
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Panel */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-100 border-b border-slate-200">
+          <StatBox label="Comparisons" value={stats.comparisons} />
+          <StatBox label="Swaps" value={stats.swaps} />
+          {mode === 'play' ? (
+             <>
+               <StatBox label="Score" value={stats.score} highlight />
+               <StatBox label="Mistakes" value={stats.mistakes} color="text-red-600" />
+             </>
+          ) : (
+             <div className="col-span-2 flex items-center justify-end gap-2">
+                <span className="text-sm font-medium text-slate-500">Speed:</span>
+                {Object.keys(ANIMATION_SPEED_LEVELS).map(level => (
+                  <button
+                    key={level}
+                    onClick={() => setSpeed(level)}
+                    className={`px-3 py-1 text-xs rounded-full border transition-colors ${speed === level ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-white border-slate-300 text-slate-600'}`}
+                  >
+                    {level}
+                  </button>
+                ))}
+             </div>
+          )}
+        </div>
+
+        {/* Visualizer Area */}
+        <div className="p-6 md:p-12 min-h-[300px] flex flex-col justify-end items-center relative bg-gradient-to-b from-white to-slate-50">
+          {/* Main Visualizer */}
+          <div className="flex items-end justify-center gap-2 w-full h-64">
+            {array.map((value, idx) => (
+              <div key={idx} className="flex flex-col justify-end items-center w-8 md:w-12 transition-all duration-300" style={{ height: '100%' }}>
+                <span className="mb-2 text-xs font-bold text-slate-500">{value}</span>
+                <div 
+                  className={`w-full rounded-t-md shadow-sm transition-all duration-200 ${getBarColor(idx)}`}
+                  style={{ height: `${value}%` }}
+                ></div>
+                {/* Index Markers */}
+                {!isSorted && idx === indices.j && <div className="mt-2 text-xs font-bold text-yellow-600">L</div>}
+                {!isSorted && idx === indices.j + 1 && <div className="mt-2 text-xs font-bold text-yellow-600">R</div>}
+              </div>
+            ))}
+          </div>
+
+          {/* Feedback Overlay */}
+          <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full shadow-lg font-medium transition-all duration-300 ${
+            feedback === 'correct' ? 'bg-green-100 text-green-800 scale-100 opacity-100' : 
+            feedback === 'wrong' ? 'bg-red-100 text-red-800 scale-100 opacity-100' : 
+            'scale-90 opacity-0 pointer-events-none'
+          }`}>
+             {feedback === 'correct' ? <span className="flex items-center gap-2"><Check size={18}/> Great Job!</span> : <span className="flex items-center gap-2"><X size={18}/> Incorrect</span>}
+          </div>
+        </div>
+
+        {/* Info Message */}
+        <div className="bg-slate-50 p-4 border-t border-slate-200 text-center">
+          <p className="text-slate-700 font-medium flex items-center justify-center gap-2">
+            <Info size={18} className="text-blue-500" />
+            {message}
+          </p>
+        </div>
+
+        {/* Controls */}
+        <div className="p-6 bg-white flex justify-center gap-4">
+          {mode === 'learn' ? (
+            <>
+               <button
+                 onClick={() => { setIsSorting(!isSorting); }}
+                 disabled={isSorted}
+                 className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-md transition-all ${
+                   isSorting ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-blue-600 text-white hover:bg-blue-700'
+                 } disabled:opacity-50 disabled:cursor-not-allowed`}
+               >
+                 {isSorting ? <><Pause size={20} /> Pause</> : <><Play size={20} /> Play</>}
+               </button>
+               
+               <button
+                 onClick={handleStep}
+                 disabled={isSorting || isSorted}
+                 className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-slate-200 text-slate-700 font-bold hover:border-blue-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                 <SkipForward size={20} /> Step
+               </button>
+
+               <button
+                 onClick={generateArray}
+                 className="flex items-center gap-2 px-6 py-3 rounded-full bg-slate-100 text-slate-600 font-bold hover:bg-slate-200"
+               >
+                 <RotateCcw size={20} /> Reset
+               </button>
+            </>
+          ) : (
+            <>
+              {/* Play Mode Controls */}
+              {!isSorted && (
+                <>
+                  <button
+                    onClick={() => handleUserDecision('swap')}
+                    className="flex-1 max-w-[160px] flex flex-col items-center justify-center gap-1 px-4 py-4 rounded-xl bg-orange-100 text-orange-800 border-2 border-orange-200 hover:bg-orange-200 hover:border-orange-300 transition-all font-bold"
+                  >
+                    <RefreshCw size={24} />
+                    SWAP
+                    <span className="text-xs font-normal opacity-75">(If Left &gt; Right)</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => handleUserDecision('pass')}
+                    className="flex-1 max-w-[160px] flex flex-col items-center justify-center gap-1 px-4 py-4 rounded-xl bg-green-100 text-green-800 border-2 border-green-200 hover:bg-green-200 hover:border-green-300 transition-all font-bold"
+                  >
+                    <Check size={24} />
+                    PASS
+                    <span className="text-xs font-normal opacity-75">(If Left &le; Right)</span>
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={generateArray}
+                className={`flex flex-col items-center justify-center gap-1 px-4 py-4 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 ${isSorted ? 'w-full max-w-sm bg-blue-600 text-white hover:bg-blue-700 shadow-lg' : ''}`}
+              >
+                {isSorted ? <span className="flex items-center gap-2"><Trophy size={20}/> Play Again</span> : <RotateCcw size={20} />}
+                {!isSorted && <span className="text-xs">Reset</span>}
+              </button>
+            </>
+          )}
+        </div>
+        
+        {/* Footer Instructions */}
+        <div className="bg-slate-50 p-4 text-xs text-slate-400 text-center border-t border-slate-200">
+          Bubble Sort algorithm: Iterate through the list, compare adjacent elements, and swap them if they are in the wrong order. Repeat until sorted.
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+const StatBox = ({ label, value, highlight = false, color = 'text-slate-800' }) => (
+  <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm flex flex-col items-center justify-center">
+    <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{label}</span>
+    <span className={`text-xl font-bold ${color} ${highlight ? 'text-blue-600' : ''}`}>{value}</span>
+  </div>
+);
+
+export default BubbleSortGame;
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      /* Slate 900 */
+      color: #f8fafc;
+      /* Slate 50 */
+      overflow-x: hidden;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+
+    /* Card Hover Effect */
+    .sim-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .sim-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Lazy Load Animation */
+    .fade-in-section {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+      will-change: opacity, visibility;
+    }
+
+    .fade-in-section.is-visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* Particle Canvas */
+    #particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col relative">
+
+  <!-- Particle Background -->
+  <canvas id="particles"></canvas>
+
+  <!-- Language Selector -->
+  <div class="absolute top-4 right-4 z-50">
+    <div class="flex bg-slate-800/80 backdrop-blur-sm rounded-full p-1 border border-slate-700 shadow-lg">
+      <button onclick="setLanguage('en-US')" id="btn-en"
+        class="px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 text-slate-400 hover:text-white">
+        EN
+      </button>
+      <button onclick="setLanguage('zh-HK')" id="btn-zh"
+        class="px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 text-slate-400 hover:text-white">
+        繁
+      </button>
+    </div>
+  </div>
+
+  <!-- Hero Section -->
+  <header class="pt-20 pb-12 px-4 text-center relative z-10">
+    <h1
+      class="text-5xl md:text-7xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 tracking-tight"
+      data-i18n="siteTitle">
+      Simulations
+    </h1>
+    <p class="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-8 font-light" data-i18n="siteTagline">
+      Interactive simulations for exploring the IT world.
+    </p>
+
+    <!-- Search Bar -->
+    <div class="max-w-md mx-auto relative group">
+      <div
+        class="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full blur opacity-30 group-hover:opacity-75 transition duration-500">
+      </div>
+      <div class="relative">
+        <input type="text" id="searchInput"
+          class="w-full bg-slate-900/90 text-white placeholder-slate-500 border border-slate-700 rounded-full py-3 px-6 pl-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-xl transition-all"
+          placeholder="Search simulations..." data-i18n-placeholder="searchPlaceholder">
+        <svg class="w-5 h-5 text-slate-500 absolute left-4 top-3.5" fill="none" stroke="currentColor"
+          viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main id="simulation-container" class="flex-grow container mx-auto px-4 pb-20 z-10">
+    <!-- Categories will be injected here -->
+  </main>
+
+
+  <script>
+    // --- Configuration ---
+    const DATA_URL = 'data/simulation.json';
+
+    // Category Order (as requested)
+    const CATEGORY_ORDER = [
+      "ICT",
+      "CL",
+      "Others",
+    ];
+
+    // i18n Configuration
+    const i18n = {
+      'en-US': {
+        siteTitle: "Simulation",
+        siteTagline: "Interactive simulations for exploring the IT world.",
+        searchPlaceholder: "Search simulations...",
+        categories: {
+          "ICT": "ICT",
+          "CL": "CL",
+          "Others": "Others",
+        },
+        contributors: "Contributors"
+      },
+      'zh-HK': {
+        siteTitle: "模擬實驗室",
+        siteTagline: "互動模擬體驗。",
+        searchPlaceholder: "搜尋模擬實驗...",
+        categories: {
+          "ICT": "資訊及通訊科技",
+          "CL": "初中 資訊和通訊科技",
+          "Others": "其他",
+        },
+        contributors: "貢獻者"
+      }
+    };
+
+    // State
+    let simulationsData = [];
+    let currentLang = 'en-US';
+
+    // --- Initialization ---
+    async function init() {
+      // 1. Load Language from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const langParam = urlParams.get('lang');
+      if (langParam && i18n[langParam]) {
+        currentLang = langParam;
+      }
+
+      updateLanguageUI();
+
+      // 2. Fetch Data
+      try {
+        const response = await fetch(`${DATA_URL}?t=${Date.now()}`);
+        simulationsData = await response.json();
+        renderSimulations();
+      } catch (error) {
+        console.error("Failed to load simulations:", error);
+        document.getElementById('simulation-container').innerHTML =
+          `<div class="text-center text-red-400 mt-10">Failed to load simulation data. Please try again later.</div>`;
+      }
+
+      // 3. Setup Search
+      document.getElementById('searchInput').addEventListener('input', (e) => {
+        renderSimulations(e.target.value);
+      });
+
+      // 4. Start Particles
+      initParticles();
+    }
+
+    // --- Rendering ---
+    function renderSimulations(filterText = '') {
+      const container = document.getElementById('simulation-container');
+      container.innerHTML = '';
+
+      const filterLower = filterText.toLowerCase();
+
+      // Group by Category
+      const grouped = {};
+
+      // Initialize groups based on order to maintain sort
+      CATEGORY_ORDER.forEach(cat => grouped[cat] = []);
+
+      // Sort data into groups
+      simulationsData.forEach(sim => {
+        // Get localized title/desc for filtering
+        const title = sim.title[currentLang] || sim.title['en-US'];
+        const desc = sim.description[currentLang] || sim.description['en-US'];
+
+        // Filter
+        if (filterText && !title.toLowerCase().includes(filterLower) && !desc.toLowerCase().includes(filterLower)) {
+          return;
+        }
+
+        // Determine Category (English key)
+        const catKey = sim.category['en-US'];
+        if (!grouped[catKey]) {
+          grouped[catKey] = []; // Handle unknown categories gracefully
+        }
+        grouped[catKey].push(sim);
+      });
+
+      // Render Groups
+      let hasContent = false;
+      for (const [category, sims] of Object.entries(grouped)) {
+        if (sims.length === 0) continue;
+        hasContent = true;
+
+        // Section Container
+        const section = document.createElement('section');
+        section.className = "mb-16 fade-in-section";
+
+        // Section Title
+        const catTitle = i18n[currentLang].categories[category] || category;
+        const h2 = document.createElement('h2');
+        h2.className = "text-2xl font-bold mb-6 text-blue-300 border-b border-slate-800 pb-2 inline-block pr-8";
+        h2.textContent = catTitle;
+        section.appendChild(h2);
+
+        // Grid
+        const grid = document.createElement('div');
+        grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6";
+
+        sims.forEach(sim => {
+          const card = createCard(sim);
+          grid.appendChild(card);
+        });
+
+        section.appendChild(grid);
+        container.appendChild(section);
+      }
+
+      if (!hasContent) {
+        container.innerHTML = `<div class="text-center text-slate-500 mt-10">No simulations found matching "${filterText}"</div>`;
+      }
+
+      // Re-trigger lazy load observer
+      setupIntersectionObserver();
+    }
+
+    function createCard(sim) {
+      const title = sim.title[currentLang] || sim.title['en-US'];
+      const desc = sim.description[currentLang] || sim.description['en-US'];
+      const contributorsLabel = i18n[currentLang].contributors;
+
+      // Construct URL with lang param
+      const simUrl = new URL(sim.simulationUrl, window.location.href);
+      simUrl.searchParams.set('lang', currentLang);
+
+      const card = document.createElement('a');
+      card.href = simUrl.toString();
+      card.className = "sim-card block bg-slate-800 rounded-xl overflow-hidden border border-slate-700 group relative";
+
+      card.innerHTML = `
+                <div class="aspect-video bg-slate-900 relative overflow-hidden">
+                    <img src="${sim.screenshotUrl}" alt="${title}" loading="lazy" 
+                        class="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent opacity-60"></div>
+                </div>
+                <div class="p-5">
+                    <h3 class="text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">${title}</h3>
+                    <p class="text-slate-400 text-sm mb-4 line-clamp-2">${desc}</p>
+                    <div class="flex items-center justify-between mt-auto">
+                        <span class="text-xs text-slate-500 font-mono">${contributorsLabel}: ${sim.contributors[0]}</span>
+                        <span class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        </span>
+                    </div>
+                </div>
+            `;
+      return card;
+    }
+
+    // --- Language Handling ---
+    function setLanguage(lang) {
+      if (currentLang === lang) return;
+      currentLang = lang;
+
+      // Update URL
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.set('lang', lang);
+      window.history.pushState({}, '', newUrl);
+
+      updateLanguageUI();
+      renderSimulations(document.getElementById('searchInput').value);
+    }
+
+    function updateLanguageUI() {
+      // Update Buttons
+      const btnEn = document.getElementById('btn-en');
+      const btnZh = document.getElementById('btn-zh');
+
+      if (currentLang === 'en-US') {
+        btnEn.className = "px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 bg-blue-500 text-white shadow-md";
+        btnZh.className = "px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 text-slate-400 hover:text-white hover:bg-slate-700";
+      } else {
+        btnZh.className = "px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 bg-blue-500 text-white shadow-md";
+        btnEn.className = "px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 text-slate-400 hover:text-white hover:bg-slate-700";
+      }
+
+      // Update Static Text
+      document.querySelector('[data-i18n="siteTitle"]').textContent = i18n[currentLang].siteTitle;
+      document.querySelector('[data-i18n="siteTagline"]').textContent = i18n[currentLang].siteTagline;
+      document.getElementById('searchInput').placeholder = i18n[currentLang].searchPlaceholder;
+      document.title = i18n[currentLang].siteTitle;
+    }
+
+    // --- Lazy Load Animation ---
+    function setupIntersectionObserver() {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target); // Only animate once
+          }
+        });
+      }, { threshold: 0.1 });
+
+      document.querySelectorAll('.fade-in-section').forEach(el => {
+        observer.observe(el);
+      });
+    }
+
+    // --- Particles Background ---
+    function initParticles() {
+      const canvas = document.getElementById('particles');
+      const ctx = canvas.getContext('2d');
+      let width, height;
+      let particles = [];
+
+      function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+      }
+
+      class Particle {
+        constructor() {
+          this.x = Math.random() * width;
+          this.y = Math.random() * height;
+          this.vx = (Math.random() - 0.5) * 0.5;
+          this.vy = (Math.random() - 0.5) * 0.5;
+          this.size = Math.random() * 2;
+          this.alpha = Math.random() * 0.5;
+        }
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+          if (this.x < 0) this.x = width;
+          if (this.x > width) this.x = 0;
+          if (this.y < 0) this.y = height;
+          if (this.y > height) this.y = 0;
+        }
+        draw() {
+          ctx.fillStyle = `rgba(100, 116, 139, ${this.alpha})`; // Slate-500
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function init() {
+        resize();
+        particles = [];
+        for (let i = 0; i < 50; i++) particles.push(new Particle());
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, width, height);
+        particles.forEach(p => {
+          p.update();
+          p.draw();
+        });
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', resize);
+      init();
+      animate();
+    }
+
+    // Run
+    init();
+
+  </script>
+</body>
+
+</html>

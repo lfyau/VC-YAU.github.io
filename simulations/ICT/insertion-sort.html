@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valtorta College Insertion Sort Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .animate-slide-up {
+            animation: slideUp 0.3s ease-out forwards;
+        }
+        
+        /* Utility */
+        .select-none { user-select: none; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+    <div id="app" class="flex flex-col items-center p-4 min-h-screen">
+        <!-- Content will be injected here by JavaScript -->
+    </div>
+
+    <script>
+        // --- Icons (Inline SVGs) ---
+        const Icons = {
+            mouse: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>`, // Using arrow for simplicity or actual pointer
+            pointer: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>`,
+            eye: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+            rotate: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/><path d="M3 3v9h9"/></svg>`,
+            check: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`,
+            x: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>`,
+            trophy: `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-4 drop-shadow-lg"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 1 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>`
+        };
+
+        // --- Game Config ---
+        const INITIAL_ARRAY_SIZE = 6;
+        const MAX_VAL = 50;
+
+        // --- State Management ---
+        const state = {
+            array: [],
+            sortedIndex: 0,
+            activeCard: null, // { value, originalIndex }
+            message: "Welcome! Select a mode to begin.",
+            mode: 'menu', // 'menu', 'play', 'watch'
+            compareIndex: null,
+            isWon: false,
+            speed: 800,
+            feedback: null // 'correct', 'wrong', null
+        };
+
+        let timeoutId = null; // For cancelling timeouts
+
+        // --- Core Functions ---
+
+        function init() {
+            resetGame();
+            render();
+        }
+
+        function generateArray() {
+            return Array.from({ length: INITIAL_ARRAY_SIZE }, () => Math.floor(Math.random() * MAX_VAL) + 1);
+        }
+
+        function resetGame() {
+            if (timeoutId) clearTimeout(timeoutId);
+            state.array = generateArray();
+            state.sortedIndex = 0;
+            state.activeCard = null;
+            state.compareIndex = null;
+            state.isWon = false;
+            state.feedback = null;
+            state.message = "Select a mode to start sorting.";
+        }
+
+        function updateState(updates) {
+            Object.assign(state, updates);
+            render();
+        }
+
+        // --- Game Logic ---
+
+        function startPlayMode() {
+            resetGame();
+            updateState({
+                mode: 'play',
+                message: "Current Level: The first card (leftmost) is considered sorted. Pick the next card!"
+            });
+        }
+
+        function startWatchMode() {
+            resetGame();
+            updateState({
+                mode: 'watch',
+                message: "Watch closely how the algorithm scans backwards."
+            });
+            runWatchStep();
+        }
+
+        function handleCardClick(index, value) {
+            if (state.mode !== 'play' || state.isWon) return;
+
+            // Logic for picking up a card
+            if (state.activeCard === null) {
+                if (index === state.sortedIndex + 1) {
+                    updateState({
+                        activeCard: { value, originalIndex: index },
+                        message: `Selected ${value}. Click the correct gap in the sorted section (Green) to insert it.`,
+                        feedback: null
+                    });
+                } else if (index <= state.sortedIndex) {
+                    triggerFeedback('wrong', "That card is already sorted! Pick the first grey card.");
+                } else {
+                    triggerFeedback('wrong', "You must pick cards in order from left to right.");
+                }
+            }
+        }
+
+        function handleGapClick(insertIndex) {
+            if (state.mode !== 'play' || !state.activeCard) return;
+
+            const sortedPart = state.array.slice(0, state.sortedIndex + 1);
+            let correctIndex = 0;
+            while (correctIndex < sortedPart.length && sortedPart[correctIndex] < state.activeCard.value) {
+                correctIndex++;
+            }
+
+            if (insertIndex === correctIndex) {
+                // Correct
+                performInsertion(insertIndex);
+                triggerFeedback('correct', `Correct! ${state.activeCard.value} inserted at index ${insertIndex}.`);
+
+                const nextSortedLimit = state.sortedIndex + 1;
+                const isFinish = nextSortedLimit >= state.array.length - 1;
+                const delay = isFinish ? 2500 : 800;
+
+                setTimeout(() => {
+                    updateState({
+                        sortedIndex: nextSortedLimit,
+                        activeCard: null,
+                        isWon: isFinish,
+                        message: isFinish ? "🎉 Array Fully Sorted! Great job!" : "Great! Now pick the next unsorted card."
+                    });
+                }, delay);
+
+            } else {
+                // Wrong
+                triggerFeedback('wrong', `Incorrect position for ${state.activeCard.value}. Try comparing it with the sorted neighbors.`);
+            }
+        }
+
+        function performInsertion(insertIndex) {
+            const newArray = [...state.array];
+            const val = newArray.splice(state.sortedIndex + 1, 1)[0];
+            newArray.splice(insertIndex, 0, val);
+            state.array = newArray;
+        }
+
+        function triggerFeedback(type, msg) {
+            updateState({ feedback: type, message: msg });
+            setTimeout(() => {
+                state.feedback = null;
+                render();
+            }, 1000);
+        }
+
+        // --- Watch Mode Loop ---
+
+        function runWatchStep() {
+            if (state.mode !== 'watch' || state.isWon) return;
+
+            if (state.activeCard) {
+                // Compare logic
+                const j = state.compareIndex;
+                if (j >= 0 && state.array[j] > state.activeCard.value) {
+                    updateState({ message: `Comparing ${state.activeCard.value} with ${state.array[j]}... ${state.activeCard.value} is smaller.` });
+                    
+                    timeoutId = setTimeout(() => {
+                        updateState({ compareIndex: j - 1 });
+                        runWatchStep();
+                    }, state.speed);
+                } else {
+                    // Found spot
+                    const insertPos = j + 1;
+                    const msg = state.array[j] 
+                        ? `Found spot! ${state.array[j]} is smaller. Inserting at index ${insertPos}.` 
+                        : `Reached start. Inserting at index ${insertPos}.`;
+                    
+                    updateState({ message: msg });
+                    
+                    timeoutId = setTimeout(() => {
+                        performInsertion(insertPos);
+                        const nextSortedLimit = state.sortedIndex + 1;
+                        const isFinish = nextSortedLimit >= state.array.length - 1;
+                        
+                        updateState({
+                            sortedIndex: nextSortedLimit,
+                            activeCard: null,
+                            compareIndex: null
+                        });
+
+                        if (isFinish) {
+                            updateState({ message: "Algorithm Complete!" });
+                            setTimeout(() => updateState({ isWon: true }), 2500);
+                        } else {
+                            runWatchStep();
+                        }
+                    }, state.speed);
+                }
+            } else {
+                // Pick up next card
+                if (state.sortedIndex < state.array.length - 1) {
+                    const nextIdx = state.sortedIndex + 1;
+                    const val = state.array[nextIdx];
+                    updateState({ message: `Step ${state.sortedIndex + 1}: Pick up ${val} (Index ${nextIdx})` });
+                    
+                    timeoutId = setTimeout(() => {
+                        updateState({
+                            activeCard: { value: val, originalIndex: nextIdx },
+                            compareIndex: state.sortedIndex
+                        });
+                        runWatchStep();
+                    }, state.speed);
+                }
+            }
+        }
+
+        // --- Rendering ---
+
+        function getBarColor(index, val) {
+            if (state.activeCard && index === state.activeCard.originalIndex) 
+                return 'bg-blue-100 border-2 border-dashed border-blue-400 opacity-50'; // Ghost
+            if (state.mode === 'watch' && index === state.compareIndex) 
+                return 'bg-yellow-200 border-yellow-500 scale-105'; // Comparing
+            if (index <= state.sortedIndex) 
+                return 'bg-green-100 border-green-500 text-green-800'; // Sorted
+            return 'bg-gray-100 border-gray-400 text-gray-800'; // Unsorted
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            
+            // 1. Header
+            let headerHTML = `
+                <div class="w-full max-w-4xl flex justify-between items-center mb-8 p-4 bg-white rounded-xl shadow-sm">
+                    <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white text-sm">IS</div>
+                        Valtorta College Insertion Sort Visualizer
+                    </h1>
+                    <div class="flex gap-2">
+            `;
+
+            if (state.mode === 'menu') {
+                headerHTML += `
+                    <button onclick="startPlayMode()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium shadow-sm">
+                        ${Icons.pointer} Play Interactive
+                    </button>
+                    <button onclick="startWatchMode()" class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium shadow-sm">
+                        ${Icons.eye} Watch Auto
+                    </button>
+                `;
+            } else {
+                if (state.mode === 'watch') {
+                    headerHTML += `
+                        <div class="flex items-center gap-2 text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full mr-2">
+                            <span>Speed:</span>
+                            <input type="range" min="100" max="1500" step="100" value="${1600 - state.speed}" 
+                                oninput="state.speed = 1600 - Number(this.value)" class="w-24 accent-purple-600 cursor-pointer">
+                        </div>
+                    `;
+                }
+                headerHTML += `
+                    <button onclick="updateState({mode: 'menu'}); resetGame()" class="flex items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm">
+                        Change Mode
+                    </button>
+                    <button onclick="${state.mode === 'play' ? 'startPlayMode()' : 'startWatchMode()'}" class="flex items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                        ${Icons.rotate}
+                    </button>
+                `;
+            }
+            headerHTML += `</div></div>`;
+
+            // 2. Main Area Container
+            let feedbackClass = 'bg-white text-slate-600';
+            let icon = '';
+            if (state.feedback === 'correct') { feedbackClass = 'bg-green-100 text-green-800'; icon = Icons.check; }
+            if (state.feedback === 'wrong') { feedbackClass = 'bg-red-100 text-red-800'; icon = Icons.x; }
+
+            // Victory Screen
+            let victoryOverlay = '';
+            if (state.isWon) {
+                victoryOverlay = `
+                    <div class="absolute inset-0 z-20 bg-white/90 flex flex-col items-center justify-center animate-fade-in">
+                        ${Icons.trophy}
+                        <h2 class="text-3xl font-bold text-slate-800 mb-2">Sorted!</h2>
+                        <p class="text-slate-600 mb-6">You successfully implemented Insertion Sort.</p>
+                        <button onclick="${state.mode === 'play' ? 'startPlayMode()' : 'startWatchMode()'}" class="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 font-medium">
+                            Play Again
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Active Card Area
+            let activeCardHTML = '';
+            if (state.activeCard) {
+                const height = Math.max(state.activeCard.value * 4, 60);
+                activeCardHTML = `
+                    <div class="flex flex-col items-center animate-slide-up">
+                        <span class="text-sm font-bold text-blue-500 mb-2 uppercase tracking-wider">Current Value</span>
+                        <div style="height: ${height}px" class="w-20 bg-blue-500 rounded-lg shadow-xl flex items-end justify-center pb-4 text-white text-3xl font-bold border-4 border-white ring-4 ring-blue-100 transform scale-110">
+                            ${state.activeCard.value}
+                        </div>
+                    </div>
+                `;
+            } else {
+                activeCardHTML = `
+                    <div class="text-slate-300 italic flex flex-col items-center justify-center h-full">
+                        <div class="w-20 h-28 border-2 border-dashed border-slate-200 rounded-lg mb-2 flex items-center justify-center text-2xl">?</div>
+                        ${state.mode === 'play' && !state.isWon ? '<span class="text-sm">Pick a card from the grey pile</span>' : ''}
+                    </div>
+                `;
+            }
+
+            // Array Rendering
+            let arrayHTML = '';
+            state.array.forEach((val, idx) => {
+                const showGap = state.activeCard && idx <= state.sortedIndex + 1;
+                const isGhost = state.activeCard && idx === state.activeCard.originalIndex;
+                const height = Math.max(val * 4, 60);
+                const colorClass = getBarColor(idx, val);
+                
+                // Gap
+                if (showGap) {
+                    arrayHTML += `
+                        <div onclick="handleGapClick(${idx})" 
+                             class="w-4 h-48 rounded-full mx-1 transition-all duration-200 flex items-center justify-center group cursor-pointer ${state.mode === 'play' ? 'hover:bg-blue-100 hover:w-12 hover:scale-110' : ''}">
+                            <div class="w-1 h-full bg-slate-200 group-hover:bg-blue-400 rounded-full transition-colors"></div>
+                        </div>
+                    `;
+                }
+
+                // Card
+                let sortedWall = '';
+                if (idx === state.sortedIndex && !state.isWon) {
+                    sortedWall = `
+                        <div class="absolute -right-1 bottom-0 w-0.5 bg-slate-400 border-r border-dashed border-slate-500 h-[280px] pointer-events-none z-10">
+                            <div class="absolute top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm whitespace-nowrap">
+                                Sorted Wall
+                            </div>
+                        </div>
+                    `;
+                }
+
+                let cursorClass = (state.mode === 'play' && !state.activeCard && idx === state.sortedIndex + 1) 
+                    ? 'cursor-pointer hover:-translate-y-2 ring-2 ring-blue-300 ring-offset-2' 
+                    : '';
+                
+                let opacityClass = isGhost ? 'opacity-30' : 'opacity-100';
+
+                arrayHTML += `
+                    <div onclick="handleCardClick(${idx}, ${val})" 
+                         style="height: ${height}px"
+                         class="relative w-16 rounded-lg shadow-sm border-b-4 flex items-end justify-center pb-2 text-xl font-bold transition-all duration-300 ${colorClass} ${cursorClass} ${opacityClass}">
+                        ${val}
+                        <span class="absolute -bottom-8 text-xs font-mono text-slate-400">idx:${idx}</span>
+                        ${sortedWall}
+                    </div>
+                `;
+            });
+
+
+            // Final Assembly
+            app.innerHTML = `
+                ${headerHTML}
+
+                <div class="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-8 min-h-[400px] flex flex-col items-center justify-center relative overflow-hidden select-none">
+                    
+                    <!-- Status Bar -->
+                    <div class="absolute top-0 left-0 right-0 h-14 flex items-center justify-center px-6 border-b transition-colors duration-300 ${feedbackClass}">
+                        <p class="text-lg font-medium flex items-center gap-2">
+                            ${icon} ${state.message}
+                        </p>
+                    </div>
+
+                    ${victoryOverlay}
+
+                    <!-- Vis Area -->
+                    <div class="mt-16 w-full flex flex-col items-center">
+                        <!-- Active Card Slot -->
+                        <div class="h-60 w-full flex items-end justify-center mb-4">
+                            ${activeCardHTML}
+                        </div>
+
+                        <!-- Array Row -->
+                        <div class="flex items-end justify-center gap-2 p-8 bg-slate-50 rounded-xl w-full overflow-x-auto min-h-[300px]">
+                            ${arrayHTML}
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="absolute bottom-4 left-8 flex gap-4 text-xs text-slate-500">
+                        <div class="flex items-center gap-1"><div class="w-3 h-3 bg-green-100 border border-green-500 rounded"></div> Sorted</div>
+                        <div class="flex items-center gap-1"><div class="w-3 h-3 bg-gray-100 border border-gray-400 rounded"></div> Unsorted</div>
+                        <div class="flex items-center gap-1"><div class="w-3 h-3 bg-blue-500 rounded"></div> Active</div>
+                    </div>
+
+                </div>
+            `;
+        }
+
+        // Initialize
+        init();
+
+    </script>
+</body>
+</html>

@@ -50,8 +50,8 @@
             "zh-HK": "資訊及通訊科技"
         },
         "title": {
-            "en-US": "insertion Sort",
-            "zh-HK": "insertion Sort"
+            "en-US": "Insertion Sort",
+            "zh-HK": "Insertion Sort"
         },
         "description": {
             "en-US": "A simulation of insertion sort.",
